@@ -10,4 +10,3 @@ def combine(string_a: str, string_b: str) -> str:
     return string_a + string_b
 
 
-def generic_transformation(df)

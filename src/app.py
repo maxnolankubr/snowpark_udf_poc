@@ -8,28 +8,56 @@ from snowflake.snowpark.dataframe import col, DataFrame
 from snowflake.snowpark.functions import udf
 import functions
 
-def run(snowpark_session: Session) -> DataFrame:
+def refresh_arsenal(snowpark_session: Session):
     """
-    A sample stored procedure which creates a small DataFrame, prints it to the
-    console, and returns the number of rows in the table.
+    Compiles fixture data for Arsenal into a table containing goals scored, goals conceded and matches played
     """
+    df = snowpark_session.table("fixtures")
+    arsenal_home_fixtures = df.select(
+        "FIXTURE_ID",
+        "HOME_TEAM_ID",
+        "AWAY_TEAM_ID",
+        col("HOME_TEAM_GOALS").alias("GOALS_FOR"),
+        col("AWAY_TEAM_GOALS").alias("GOALS_AGAINST")
+    ).filter((col("HOME_TEAM_ID")== 1))
 
-    combine_udf = udf(functions.combine)
-
-    schema = ["col_1", "col_2"]
-
-    data = [
-        ("Welcome to ", "Snowflake!"),
-        ("Learn more: ", "https://www.snowflake.com/snowpark/"),
-    ]
-
-    df = snowpark_session.create_dataframe(data, schema)
-
-    df2 = df.select(combine_udf(col("col_1"), col("col_2")).as_("hello_world")).sort(
-        "hello_world", ascending=False
+    arsenal_home_totals = arsenal_home_fixtures.agg(
+        {"FIXTURE_ID": "count", 
+         "GOALS_FOR": "sum", 
+         "GOALS_AGAINST": "sum"}
     )
 
-    return df2
+    arsenal_away_fixtures = df.select(
+        "FIXTURE_ID",
+        "HOME_TEAM_ID",
+        "AWAY_TEAM_ID",
+        col("HOME_TEAM_GOALS").alias("GOALS_AGAINST"),
+        col("AWAY_TEAM_GOALS").alias("GOALS_FOR")
+    ).filter((col("AWAY_TEAM_ID")== 1))
+
+    arsenal_away_totals = arsenal_away_fixtures.agg(
+        {"FIXTURE_ID": "count", 
+         "GOALS_FOR": "sum", 
+         "GOALS_AGAINST": "sum"}
+    )
+
+    arsenal_totals = arsenal_home_totals.union(arsenal_away_totals).agg(
+        {"COUNT(FIXTURE_ID)": "sum", 
+         "SUM(GOALS_FOR)": "sum", 
+         "SUM(GOALS_AGAINST)": "sum"}
+    )
+
+    arsenal_totals = arsenal_totals.select(
+        col("SUM(COUNT(FIXTURE_ID))").alias("GAMES_PLAYED"),
+        col("SUM(SUM(GOALS_FOR))").alias("GOALS_SCORED"),
+         col("SUM(SUM(GOALS_AGAINST))").alias("GOALS_CONCEDED")
+    )
+
+
+    return arsenal_totals
+
+
+
 
 
 if __name__ == "__main__":
@@ -42,7 +70,7 @@ if __name__ == "__main__":
     session.add_import(functions.__file__, 'functions')
 
     print("Running stored procedure...")
-    result = run(session)
+    result = refresh_arsenal(session)
 
     print("Stored procedure complete:")
     result.show()
