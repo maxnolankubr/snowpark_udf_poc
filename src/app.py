@@ -7,6 +7,7 @@ from snowflake.snowpark.session import Session
 from snowflake.snowpark.dataframe import col, DataFrame
 from snowflake.snowpark.functions import udf
 import functions
+import pandas
 
 def refresh_arsenal(snowpark_session: Session):
     """
@@ -57,7 +58,11 @@ def refresh_arsenal(snowpark_session: Session):
     return arsenal_totals
 
 
+def write_to_snowflake(dataframe: DataFrame, dest_table: str, snowpark_session: Session):
+    dataframe = dataframe.toPandas()
+    snowpark_df = snowpark_session.write_pandas(dataframe,dest_table,auto_create_table=False)
 
+    return snowpark_df
 
 
 if __name__ == "__main__":
@@ -74,3 +79,5 @@ if __name__ == "__main__":
 
     print("Stored procedure complete:")
     result.show()
+
+    write_arsenal_table = write_to_snowflake(result,'ARSENAL', session)
